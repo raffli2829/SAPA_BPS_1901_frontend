@@ -276,11 +276,13 @@ export default function WhatsAppHostPage() {
     }
   }, []);
 
-  // 2. Refresh QR Code via backend reset
+  // 2. Refresh QR Code (manual = reset sesi di server, auto = hanya sinkronisasi status terbaru)
   const handleRefreshQR = useCallback(async (manual = true) => {
     setIsRefreshingQR(true);
     try {
-      await BackendApi.resetBotSession();
+      if (manual) {
+        await BackendApi.resetBotSession();
+      }
       setCountdown(QR_EXPIRE_SECONDS);
       setPairingCode(null);
       await fetchStatus();
@@ -288,7 +290,9 @@ export default function WhatsAppHostPage() {
         setToast({ msg: 'Sesi diperbarui. Menyiapkan QR Code baru...', type: 'success' });
       }
     } catch (err) {
-      setToast({ msg: 'Gagal memperbarui QR Code. Pastikan server backend aktif.', type: 'error' });
+      if (manual) {
+        setToast({ msg: 'Gagal memperbarui QR Code. Pastikan server backend aktif.', type: 'error' });
+      }
     } finally {
       setIsRefreshingQR(false);
     }
@@ -368,14 +372,14 @@ export default function WhatsAppHostPage() {
     };
   }, [isAuthenticated, isLoading, router, fetchStatus]);
 
-  // 60-second auto-refresh countdown when NOT connected
+  // Auto-refresh polling saat BELUM connected
   useEffect(() => {
-    if (botStatus.state === 'connected') return;
+    if (botStatus.state === 'connected' || healthData?.botState === 'connected') return;
 
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
-          // Auto refresh QR saat waktu habis
+          // Hanya sinkronisasi status/QR terbaru tanpa mereset sesi aktif di server
           handleRefreshQR(false);
           return QR_EXPIRE_SECONDS;
         }
@@ -384,11 +388,12 @@ export default function WhatsAppHostPage() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [botStatus.state, handleRefreshQR]);
+  }, [botStatus.state, healthData?.botState, handleRefreshQR]);
 
   if (isLoading || !isAuthenticated) return null;
 
-  const isConnected = botStatus.state === 'connected';
+  const isConnected = botStatus.state === 'connected' || healthData?.botState === 'connected';
+  const effectivePhoneNumber = botStatus.phoneNumber || healthData?.phoneNumber;
 
   return (
     <AppLayout>
@@ -422,6 +427,24 @@ export default function WhatsAppHostPage() {
                   }}
                 />
                 ONLINE & TERHUBUNG
+              </div>
+            ) : botStatus.state === 'connecting' ? (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 14px',
+                  borderRadius: 20,
+                  background: '#eff6ff',
+                  border: '1px solid #3b82f6',
+                  color: '#1d4ed8',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                }}
+              >
+                <RefreshCw size={12} className="spin" />
+                MENYAMBUNGKAN KE WHATSAPP...
               </div>
             ) : botStatus.state === 'qr_ready' ? (
               <div
@@ -581,7 +604,7 @@ export default function WhatsAppHostPage() {
                       PERANGKAT HOST AKTIF
                     </div>
                     <h2 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 6px 0', letterSpacing: '-0.02em' }}>
-                      {formatPhone(botStatus.phoneNumber)}
+                      {formatPhone(effectivePhoneNumber)}
                     </h2>
                     <p style={{ margin: 0, fontSize: 13.5, color: '#a7f3d0', maxWidth: 540, lineHeight: 1.5 }}>
                       Akun WhatsApp ini bertindak sebagai penanggung jawab resmi layanan chatbot <strong>SAPA BPS Kab. Bangka</strong>. Seluruh pesan masyarakat akan dijawab secara otomatis melalui nomor ini.
@@ -1166,7 +1189,7 @@ export default function WhatsAppHostPage() {
           </div>
           <div>
             <p style={{ margin: '0 0 8px 0', fontSize: 13.5, color: '#334155', lineHeight: 1.5 }}>
-              Apakah Anda yakin ingin memutuskan sambungan nomor WhatsApp <strong>{formatPhone(botStatus.phoneNumber)}</strong> dari bot SAPA BPS?
+              Apakah Anda yakin ingin memutuskan sambungan nomor WhatsApp <strong>{formatPhone(effectivePhoneNumber)}</strong> dari bot SAPA BPS?
             </p>
             <p style={{ margin: 0, fontSize: 12.5, color: '#64748b', lineHeight: 1.4 }}>
               Setelah diputuskan, bot tidak akan lagi membalas pesan WhatsApp dari nomor ini sampai ada perangkat baru yang memindai QR code berikutnya.

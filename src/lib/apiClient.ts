@@ -46,6 +46,8 @@ async function safeFetch<T>(url: string, options?: RequestInit): Promise<T | nul
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'ngrok-skip-browser-warning': 'true',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    Pragma: 'no-cache',
     ...(API_KEY ? { 'x-api-key': API_KEY } : {}),
     ...(options?.headers as Record<string, string> || {}),
   };
@@ -57,6 +59,7 @@ async function safeFetch<T>(url: string, options?: RequestInit): Promise<T | nul
 
   try {
     const res = await fetch(fullUrl, {
+      cache: 'no-store',
       ...options,
       headers,
     });
@@ -311,7 +314,7 @@ export const BackendApi = {
       uptime: number;
       botState: string;
       phoneNumber: string | null;
-    }>(`${BASE_URL}/health`);
+    }>(`${BASE_URL}/health?_t=${Date.now()}`, { cache: 'no-store' });
   },
 
   // Bot Status & Chat Integration
@@ -330,7 +333,7 @@ export const BackendApi = {
       connectedAt?: string;
       qrUpdatedAt?: number;
       serverTime?: string;
-    }>(`${BASE_URL}/api/bot/status`);
+    }>(`${BASE_URL}/api/bot/status?_t=${Date.now()}`, { cache: 'no-store' });
   },
 
   async resetBotSession(): Promise<{ success: boolean; message: string } | null> {
