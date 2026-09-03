@@ -24,22 +24,26 @@ const isLocalOrigin = isClient && (
   window.location.hostname.startsWith('172.')
 );
 
-const PUBLIC_BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || '').replace(/\/$/, '');
+// Default fallback dari .env.local jika tidak ada environment variable di hosting
+export const DEFAULT_BACKEND_URL = 'https://footless-aptitude-caloric.ngrok-free.dev';
+export const DEFAULT_API_KEY = 'sapa_bps_secure_token_2026';
+
+const PUBLIC_BACKEND_URL = (process.env.NEXT_PUBLIC_BACKEND_URL || DEFAULT_BACKEND_URL).replace(/\/$/, '');
 const LOCAL_BACKEND_URL = (process.env.BACKEND_URL || 'http://localhost:80').replace(/\/$/, '');
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY || '';
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || DEFAULT_API_KEY;
 
 // Target primer: URL relatif untuk Next.js server rewrite jika di lingkungan lokal,
-// atau PUBLIC_BACKEND_URL jika di hosting publik luar.
+// atau PUBLIC_BACKEND_URL jika di hosting publik luar (seperti Vercel).
 const RAW_BACKEND_URL = isLocalOrigin
   ? ''
-  : (PUBLIC_BACKEND_URL || LOCAL_BACKEND_URL || (isClient ? '' : (process.env.BACKEND_INTERNAL_URL || 'http://localhost:80')));
+  : (PUBLIC_BACKEND_URL || DEFAULT_BACKEND_URL);
 
 const BASE_URL = RAW_BACKEND_URL ? RAW_BACKEND_URL.replace(/\/$/, '') : '';
 
 export function getEffectiveBackendUrl(): string {
   if (!isClient) return LOCAL_BACKEND_URL || 'http://localhost:80';
   if (isLocalOrigin) return window.location.origin + ' (Port 80 Proxy)';
-  return PUBLIC_BACKEND_URL || window.location.origin;
+  return PUBLIC_BACKEND_URL || DEFAULT_BACKEND_URL;
 }
 
 async function safeFetch<T>(url: string, options?: RequestInit): Promise<T | null> {

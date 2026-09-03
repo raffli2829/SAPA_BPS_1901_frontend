@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
 import Header from '@/components/layout/Header';
 import { Button, Modal, Toast } from '@/components/ui';
-import { BackendApi } from '@/lib/apiClient';
+import { BackendApi, getEffectiveBackendUrl } from '@/lib/apiClient';
 import { formatDate } from '@/lib/utils';
 import {
   QrCode,
@@ -163,10 +163,14 @@ export default function WhatsAppHostPage() {
         }
       }
 
-      if (healthRes && (healthRes.status === 'ok' || healthRes.service)) {
-        setHealthData(healthRes);
-        const botConnected = botRes?.state === 'connected' || healthRes.botState === 'connected';
-        const phone = botRes?.phoneNumber || healthRes.phoneNumber;
+      const isBackendLive = Boolean(healthRes && (healthRes.status === 'ok' || healthRes.service)) || Boolean(botRes);
+
+      if (isBackendLive) {
+        if (healthRes) {
+          setHealthData(healthRes);
+        }
+        const botConnected = botRes?.state === 'connected' || healthRes?.botState === 'connected';
+        const phone = botRes?.phoneNumber || healthRes?.phoneNumber;
 
         if (botConnected) {
           setToast({
@@ -175,19 +179,19 @@ export default function WhatsAppHostPage() {
           });
         } else if (botRes?.state === 'qr_ready') {
           setToast({
-            msg: `🟡 [${ping}ms] Server Port 80 Aktif. Bot WhatsApp siap scan QR code.`,
+            msg: `🟡 [${ping}ms] Server Backend Aktif. Bot WhatsApp siap scan QR code.`,
             type: 'success',
           });
         } else {
           setToast({
-            msg: `🔵 [${ping}ms] Server Port 80 Aktif. Bot WhatsApp status: ${botRes?.state || 'connecting'}`,
+            msg: `🔵 [${ping}ms] Server Backend Aktif. Bot WhatsApp status: ${botRes?.state || healthRes?.botState || 'connecting'}`,
             type: 'success',
           });
         }
       } else {
-        setCheckError('Server backend port 80 tidak merespons. Pastikan file START_SAPA_BPS.bat sudah dijalankan.');
+        setCheckError('Server backend tidak merespons. Pastikan file START_SAPA_BPS.bat dan tunnel Ngrok aktif.');
         setToast({
-          msg: '❌ Server backend port 80 tidak merespons. Periksa START_SAPA_BPS.bat.',
+          msg: '❌ Server backend tidak merespons. Periksa tunnel Ngrok dan START_SAPA_BPS.bat.',
           type: 'error',
         });
       }
@@ -1391,15 +1395,15 @@ export default function WhatsAppHostPage() {
                     fontWeight: 700,
                     padding: '2px 8px',
                     borderRadius: 12,
-                    background: healthData ? '#dcfce7' : '#fee2e2',
-                    color: healthData ? '#15803d' : '#b91c1c',
+                    background: (healthData || botStatus.state) ? '#dcfce7' : '#fee2e2',
+                    color: (healthData || botStatus.state) ? '#15803d' : '#b91c1c',
                   }}
                 >
-                  {healthData ? 'PORT 80 AKTIF' : 'OFFLINE'}
+                  {(healthData || botStatus.state) ? 'PORT 80 AKTIF' : 'OFFLINE'}
                 </span>
               </div>
               <div style={{ fontSize: 11.5, color: '#64748b', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <div>Host: <strong>http://127.0.0.1:80</strong></div>
+                <div>Target: <strong style={{ wordBreak: 'break-all' }}>{getEffectiveBackendUrl()}</strong></div>
                 <div>Uptime: <strong>{formatUptime(healthData?.uptime)}</strong></div>
               </div>
             </div>
