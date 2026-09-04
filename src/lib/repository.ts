@@ -1432,22 +1432,46 @@ export const ChatbotTemplateRepo = {
     mLines.push(`${s1}. *Apa saja layanan BPS?*`);
     mLines.push(`${s2}. *Hubungi Petugas PST BPS*`);
 
-    const dynamicMenuTemplate: ChatbotTemplate = {
-      id: 'tpl-system-menu',
-      keyword: 'Menu Utama',
-      response:
-        `📋 *MENU UTAMA LAYANAN DATA SAPA BPS*\n🏛️ *BPS KABUPATEN BANGKA*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `Silakan pilih topik informasi statistik resmi BPS Kab. Bangka berikut:\n\n` +
-        mLines.join('\n') +
-        `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `💡 _Balas dengan angka *1* - *${s2}*, ketik pertanyaan langsung, atau ketik *petugas* untuk konsultasi PST._`,
-      category: 'Layanan & Kontak',
-      source_type: 'DATASET',
-      is_active: true,
-      updated_at: new Date().toISOString(),
-    };
+    const defaultMenuResponse =
+      `📋 *MENU UTAMA LAYANAN DATA SAPA BPS*\n🏛️ *BPS KABUPATEN BANGKA*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `Silakan pilih topik informasi statistik resmi BPS Kab. Bangka berikut:\n\n` +
+      mLines.join('\n') +
+      `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `💡 _Balas dengan angka *1* - *${s2}*, ketik pertanyaan langsung, atau ketik *petugas* untuk konsultasi PST._`;
 
-    return [dynamicMenuTemplate, ...datasetTemplates, ...filteredManual];
+    // Cek apakah pengguna sudah memiliki template Menu Utama yang telah diedit/disimpan
+    const existingMenuIdx = manualList.findIndex(
+      (m) => m.id === 'tpl-system-menu' || m.keyword.trim().toLowerCase() === 'menu utama'
+    );
+
+    let menuTemplate: ChatbotTemplate;
+    if (existingMenuIdx !== -1) {
+      menuTemplate = {
+        ...manualList[existingMenuIdx],
+        id: 'tpl-system-menu',
+        keyword: manualList[existingMenuIdx].keyword || 'Menu Utama',
+        source_type: 'MANUAL',
+      };
+      // Hapus dari filteredManual jika ada di dalamnya agar tidak dobel
+      const dupIdx = filteredManual.findIndex(
+        (m) => m.id === 'tpl-system-menu' || m.keyword.trim().toLowerCase() === 'menu utama'
+      );
+      if (dupIdx !== -1) {
+        filteredManual.splice(dupIdx, 1);
+      }
+    } else {
+      menuTemplate = {
+        id: 'tpl-system-menu',
+        keyword: 'Menu Utama',
+        response: defaultMenuResponse,
+        category: 'Layanan & Kontak',
+        source_type: 'MANUAL',
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      };
+    }
+
+    return [menuTemplate, ...filteredManual, ...datasetTemplates];
   },
 
   getById(id: string): ChatbotTemplate | undefined {
@@ -1498,8 +1522,29 @@ export const ChatbotTemplateRepo = {
     }
 
     const list = [...getCachedTemplates()];
-    const idx = list.findIndex((t) => t.id === id);
-    if (idx === -1) return undefined;
+    const isMenuUtama = id === 'tpl-system-menu' || data.keyword?.trim().toLowerCase() === 'menu utama';
+    const idx = list.findIndex(
+      (t) => t.id === id || (isMenuUtama && (t.id === 'tpl-system-menu' || t.keyword.trim().toLowerCase() === 'menu utama'))
+    );
+
+    if (idx === -1) {
+      if (isMenuUtama) {
+        const newMenu: ChatbotTemplate = {
+          id: 'tpl-system-menu',
+          keyword: data.keyword?.trim() || 'Menu Utama',
+          response: data.response?.trim() || '',
+          category: data.category?.trim() || 'Layanan & Kontak',
+          source_type: 'MANUAL',
+          is_active: data.is_active !== undefined ? data.is_active : true,
+          updated_at: new Date().toISOString(),
+        };
+        list.unshift(newMenu);
+        saveCachedTemplates(list);
+        BackendApi.saveFaq(newMenu.keyword, newMenu.response.replace(/\n/g, '<br>')).catch(() => {});
+        return newMenu;
+      }
+      return undefined;
+    }
 
     const old = list[idx];
     const updated: ChatbotTemplate = {
@@ -1526,10 +1571,20 @@ export const ChatbotTemplateRepo = {
     }
 
     const list = [...getCachedTemplates()];
-    const target = list.find((t) => t.id === id);
+    const isMenuUtama = id === 'tpl-system-menu';
+    const target = list.find(
+      (t) => t.id === id || (isMenuUtama && (t.id === 'tpl-system-menu' || t.keyword.trim().toLowerCase() === 'menu utama'))
+    );
+
+    if (!target && isMenuUtama) {
+      // Menu utama yang belum disimpan kustom tidak perlu dihapus dari cache
+      return true;
+    }
     if (!target) return false;
 
-    const filtered = list.filter((t) => t.id !== id);
+    const filtered = list.filter(
+      (t) => t.id !== target.id && (!isMenuUtama || t.keyword.trim().toLowerCase() !== 'menu utama')
+    );
     saveCachedTemplates(filtered);
 
     BackendApi.deleteFaq(target.keyword).catch(() => {});

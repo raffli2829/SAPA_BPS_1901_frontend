@@ -193,6 +193,14 @@ export default function KeywordsPage() {
       alert('Template yang berasal dari dataset resmi bersifat otomatis dan tidak dapat dihapus.');
       return;
     }
+    if (tpl.id === 'tpl-system-menu') {
+      if (confirm('Kembalikan template "Menu Utama" ke susunan menu default otomatis dari pangkalan data BPS?')) {
+        ChatbotTemplateRepo.delete(tpl.id);
+        setTemplates(ChatbotTemplateRepo.getAll());
+        setToast({ msg: 'Template "Menu Utama" berhasil di-reset ke default pangkalan data BPS.', type: 'success' });
+      }
+      return;
+    }
     if (confirm(`Hapus template kata kunci "${tpl.keyword}" dari bot WhatsApp?`)) {
       ChatbotTemplateRepo.delete(tpl.id);
       setTemplates(ChatbotTemplateRepo.getAll());
@@ -268,12 +276,17 @@ export default function KeywordsPage() {
           `🏛️ *LAYANAN KONSULTASI STATISTIK TERPADU (PST)*\n*BPS Kabupaten Bangka*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n🏢 *Alamat:* Jl. Ahmad Yani Jalur Dua Sungailiat\n⏰ *Jam Layanan:* Senin – Jumat (08.00 – 15.30 WIB)\n📞 *WhatsApp PST:* https://wa.me/6281234567890\n✉️ *Email:* bps1901@bps.go.id\n🌐 *Portal:* bangkakab.bps.go.id`,
       });
 
+      const customMenuTpl = templates.find(
+        (t) => t.id === 'tpl-system-menu' || t.keyword.trim().toLowerCase() === 'menu utama'
+      );
+
       const dynamicMenuStr =
-        `📋 *MENU UTAMA LAYANAN DATA SAPA BPS*\n🏛️ *BPS KABUPATEN BANGKA*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        customMenuTpl?.response ||
+        (`📋 *MENU UTAMA LAYANAN DATA SAPA BPS*\n🏛️ *BPS KABUPATEN BANGKA*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
         `Silakan pilih topik informasi statistik resmi BPS Kab. Bangka berikut:\n\n` +
         dynamicItems.map((it) => `${it.num}. *${it.label}*`).join('\n') +
         `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `💡 _Balas dengan angka *1* - *${s2Num}*, atau ketik kata kunci pertanyaan langsung._`;
+        `💡 _Balas dengan angka *1* - *${s2Num}*, atau ketik kata kunci pertanyaan langsung._`);
 
       let reply = '';
 
@@ -301,7 +314,9 @@ export default function KeywordsPage() {
 
       // 2. Jika tidak dalam submenu
       if (!reply) {
-        if (/^\d+$/.test(clean)) {
+        if (clean === 'menu' || clean === 'menu utama' || clean === 'bantuan' || clean === 'help') {
+          reply = dynamicMenuStr;
+        } else if (/^\d+$/.test(clean)) {
           const num = parseInt(clean, 10);
           const item = dynamicItems.find((d) => d.num === num);
           if (item) {
@@ -787,6 +802,23 @@ export default function KeywordsPage() {
                                   >
                                     <Lock size={11} /> Dari Dataset Resmi (Hanya Preview)
                                   </span>
+                                ) : tpl.id === 'tpl-system-menu' ? (
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      color: '#047857',
+                                      background: '#ecfdf5',
+                                      border: '1px solid #a7f3d0',
+                                      padding: '2px 8px',
+                                      borderRadius: 999,
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                    }}
+                                  >
+                                    <Edit2 size={11} /> Menu Utama (Dapat Diedit)
+                                  </span>
                                 ) : (
                                   <span
                                     style={{
@@ -889,17 +921,43 @@ export default function KeywordsPage() {
                                 <>
                                   <button
                                     type="button"
+                                    onClick={() => setPreviewTemplate(tpl)}
+                                    title="Lihat Preview Lengkap"
+                                    style={{
+                                      padding: '5px 10px',
+                                      fontSize: 11.5,
+                                      fontWeight: 600,
+                                      color: '#0369a1',
+                                      background: '#f0f9ff',
+                                      border: '1px solid #bae6fd',
+                                      borderRadius: 'var(--radius-md)',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                    }}
+                                  >
+                                    <Eye size={13} /> Preview
+                                  </button>
+                                  <button
+                                    type="button"
                                     onClick={() => handleOpenModal(tpl)}
                                     style={{
-                                      padding: '5px 8px',
-                                      color: 'var(--slate-600)',
-                                      background: 'transparent',
-                                      border: 'none',
+                                      padding: '5px 10px',
+                                      fontSize: 11.5,
+                                      fontWeight: 600,
+                                      color: '#0f766e',
+                                      background: '#f0fdfa',
+                                      border: '1px solid #99f6e4',
+                                      borderRadius: 'var(--radius-md)',
                                       cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 4,
                                     }}
-                                    title="Edit Template Manual"
+                                    title={tpl.id === 'tpl-system-menu' ? 'Ubah Teks Menu Utama' : 'Edit Template Manual'}
                                   >
-                                    <Edit2 size={14} />
+                                    <Edit2 size={13} /> Ubah
                                   </button>
                                   <button
                                     type="button"
@@ -910,8 +968,10 @@ export default function KeywordsPage() {
                                       background: 'transparent',
                                       border: 'none',
                                       cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
                                     }}
-                                    title="Hapus Template"
+                                    title={tpl.id === 'tpl-system-menu' ? 'Reset ke Menu Default' : 'Hapus Template'}
                                   >
                                     <Trash2 size={14} />
                                   </button>
@@ -943,6 +1003,8 @@ export default function KeywordsPage() {
                             <span>
                               {isFromDataset
                                 ? '🔒 Template otomatis tersinkronisasi dari pangkalan data BPS.'
+                                : tpl.id === 'tpl-system-menu'
+                                ? '✏️ Template Menu Utama dapat diedit dan disesuaikan secara bebas.'
                                 : '✏️ Template kustom buatan operator.'}
                             </span>
                             <span>{tpl.updated_at ? `Diperbarui: ${tpl.updated_at.slice(0, 10)}` : ''}</span>
