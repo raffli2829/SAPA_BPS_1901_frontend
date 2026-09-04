@@ -11,6 +11,24 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
+  // Coba ambil data terbaru dari backend Express
+  const backendUrl = (process.env.BACKEND_URL || 'http://127.0.0.1:80').replace(/\/$/, '');
+  try {
+    const res = await fetch(`${backendUrl}/api/datasets/${encodeURIComponent(id)}`, {
+      cache: 'no-store',
+      headers: { 'x-api-key': process.env.NEXT_PUBLIC_API_KEY || 'sapa_bps_secure_token_2026' }
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.data) {
+        return NextResponse.json({ success: true, data: json.data });
+      }
+    }
+  } catch (err) {
+    // Fallback ke DatasetRepo
+  }
+
   const dataset = DatasetRepo.getById(id);
 
   if (!dataset) {

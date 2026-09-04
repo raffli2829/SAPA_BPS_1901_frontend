@@ -140,6 +140,8 @@ function updateBackendStatus(partial: Partial<BackendConnectionState>) {
 }
 
 let isSyncing = false;
+const pendingDeletedDatasets = new Set<string>();
+const pendingDeletedRecords = new Set<string>();
 
 /**
  * Sinkronisasi data real-time dua arah dengan backend Express / db_store.json
@@ -153,7 +155,7 @@ export async function syncWithBackend(): Promise<void> {
     const currentStore = getStore();
 
     // 1. Prioritaskan Full Snapshot Sync dua arah:
-    // Kirim data lokal saat ini (termasuk input terbaru) ke backend, dan terima database gabungan yang utuh.
+    // Kirim data lokal saat ini (termasuk input terbaru dan id yang dihapus) ke backend, dan terima database gabungan yang utuh.
     const syncRes = await BackendApi.syncStore({
       datasets: currentStore.datasets,
       records: currentStore.records,
@@ -161,9 +163,14 @@ export async function syncWithBackend(): Promise<void> {
       users: currentStore.users,
       reviews: currentStore.reviews,
       auditLogs: currentStore.auditLogs,
+      deleted_dataset_ids: Array.from(pendingDeletedDatasets),
+      deleted_record_ids: Array.from(pendingDeletedRecords),
     });
 
     if (syncRes && Array.isArray(syncRes.datasets)) {
+      pendingDeletedDatasets.clear();
+      pendingDeletedRecords.clear();
+
       currentStore.datasets = syncRes.datasets;
       if (Array.isArray(syncRes.records)) currentStore.records = syncRes.records;
       if (Array.isArray(syncRes.categories)) currentStore.categories = syncRes.categories;
@@ -287,7 +294,30 @@ export const CategoryRepo = {
     getStore().categories.push(category);
     BackendApi.createCategory(category).catch(() => {});
     notify();
+    syncWithBackend().catch(() => {});
     return category;
+  },
+
+  update(id: string, updates: Partial<Category>): Category | undefined {
+    const s = getStore();
+    const idx = s.categories.findIndex((c) => c.id === id);
+    if (idx === -1) return undefined;
+    s.categories[idx] = { ...s.categories[idx], ...updates };
+    BackendApi.updateCategory(id, updates).catch(() => {});
+    notify();
+    syncWithBackend().catch(() => {});
+    return s.categories[idx];
+  },
+
+  delete(id: string): boolean {
+    const s = getStore();
+    const idx = s.categories.findIndex((c) => c.id === id);
+    if (idx === -1) return false;
+    s.categories.splice(idx, 1);
+    BackendApi.deleteCategory(id).catch(() => {});
+    notify();
+    syncWithBackend().catch(() => {});
+    return true;
   },
 };
 
@@ -395,6 +425,7 @@ export const DatasetRepo = {
 
     BackendApi.createDataset(dataset).catch(() => {});
     notify();
+    syncWithBackend().catch(() => {});
     return dataset;
   },
 
@@ -442,6 +473,7 @@ export const DatasetRepo = {
 
     BackendApi.updateDataset(id, updates).catch(() => {});
     notify();
+    syncWithBackend().catch(() => {});
     return s.datasets[index];
   },
 
@@ -509,6 +541,7 @@ export const DatasetRepo = {
     if (index === -1) return false;
 
     const dataset = s.datasets[index];
+    pendingDeletedDatasets.add(id);
 
     // Hapus total dataset dari daftar agar tidak muncul di katalog jika salah buat
     s.datasets.splice(index, 1);
@@ -529,6 +562,7 @@ export const DatasetRepo = {
 
     BackendApi.deleteDataset(id).catch(() => {});
     notify();
+    syncWithBackend().catch(() => {});
     return true;
   },
 };
@@ -596,6 +630,7 @@ export const RecordRepo = {
 
     BackendApi.createRecord(record).catch(() => {});
     notify();
+    syncWithBackend().catch(() => {});
     return record;
   },
 
@@ -646,6 +681,7 @@ export const RecordRepo = {
     }
 
     notify();
+    syncWithBackend().catch(() => {});
     return created;
   },
 
@@ -695,6 +731,7 @@ export const RecordRepo = {
 
     BackendApi.updateRecord(id, updates).catch(() => {});
     notify();
+    syncWithBackend().catch(() => {});
     return s.records[index];
   },
 
@@ -702,6 +739,7 @@ export const RecordRepo = {
     const record = getStore().records.find((r) => r.id === id);
     if (!record) return false;
 
+    pendingDeletedRecords.add(id);
     record.is_deleted = true;
     record.updated_by = userId;
     record.updated_at = new Date().toISOString();
@@ -718,6 +756,7 @@ export const RecordRepo = {
 
     BackendApi.deleteRecord(id).catch(() => {});
     notify();
+    syncWithBackend().catch(() => {});
     return true;
   },
 
@@ -1300,44 +1339,81 @@ export const ChatbotTemplateRepo = {
           )
           .sort((a, b) => b.period.localeCompare(a.period));
 
-      let dataSummary = '';
-      if (records.length > 0) {
-        const latest = records.slice(0, 5);
-        dataSummary = latest
-          .map(
+        let dataSummary = '';
+        if (records.length > 0) {
+          const latest = records[0];
+          const latestVal = typeof latest.value === 'number' ? latest.value.toLocaleString('id-ID') : latest.value;
+          const historyLines = records.slice(0, 5).map(
             (r) =>
-              `• Periode *${r.period}* (${r.region}): *${r.value?.toLocaleString('id-ID')}* ${r.unit || ds.unit}`
-          )
-          .join('\n');
-      } else {
-        dataSummary = '• _Data sedang dalam pemutakhiran berkala._';
+              `• Tahun *${r.period}* (${r.region}): *${typeof r.value === 'number' ? r.value.toLocaleString('id-ID') : r.value}* ${r.unit || ds.unit}${r.notes ? ` _(${r.notes})_` : ''}`
+          ).join('\n');
+
+          dataSummary =
+            `⭐ *REALISASI TERBARU (Tahun ${latest.period}):*\n` +
+            `👉 *${latestVal} ${latest.unit || ds.unit}*` +
+            (latest.notes ? `\n_Catatan: ${latest.notes}_` : '') +
+            `\n\n📈 *Rincian Perkembangan Historis (Terkini ke Terdahulu):*\n${historyLines}`;
+        } else {
+          dataSummary = '• _Data sedang dalam pemutakhiran berkala._';
+        }
+
+        const response =
+          `📊 *DATA RESMI: ${ds.name.toUpperCase()}*\n` +
+          `🏛️ *BPS Kabupaten Bangka* (Kode: ${ds.code})\n` +
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+          `📍 *Cakupan:* ${ds.geographic_scope}\n` +
+          `${dataSummary}\n\n` +
+          (ds.definition ? `ℹ️ *Konsep/Definisi:* ${ds.definition.slice(0, 120)}...\n\n` : '') +
+          `📌 *Sumber Data:* ${ds.source || 'BPS Kabupaten Bangka'}\n` +
+          `💡 _Data diambil otomatis langsung dari Katalog Dataset SAPA BPS._`;
+
+        return {
+          id: `tpl-dataset-${ds.id}`,
+          keyword: ds.name,
+          response,
+          category: ds.category || 'Data Statistik BPS',
+          source_type: 'DATASET',
+          dataset_id: ds.id,
+          dataset_code: ds.code,
+          is_active: true,
+          updated_at: ds.updated_at,
+        };
+      });
+
+    // Filter template manual lama agar tidak menimpa/menduplikasi data resmi dari dataset
+    const datasetKeywords = new Set(
+      datasetTemplates.flatMap((t) => [
+        t.keyword.toLowerCase(),
+        (t.category || '').toLowerCase(),
+      ])
+    );
+    const filteredManual = manualList.filter((m) => {
+      const kw = m.keyword.toLowerCase();
+      // Selalu izinkan template layanan, kontak, dan FAQ umum
+      if (
+        kw.includes('layanan') ||
+        kw.includes('petugas') ||
+        kw.includes('pst') ||
+        kw.includes('kontak') ||
+        kw.includes('bantuan') ||
+        kw.includes('alamat') ||
+        kw.includes('jam')
+      ) {
+        return true;
       }
-
-      const response =
-        `📊 *DATA RESMI: ${ds.name.toUpperCase()}*\n` +
-        `🏛️ *BPS Kabupaten Bangka* (Kode: ${ds.code})\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
-        `📍 *Cakupan:* ${ds.geographic_scope}\n` +
-        `📈 *Rincian Indikator Terbaru:*\n${dataSummary}\n\n` +
-        (ds.definition ? `ℹ️ *Konsep/Definisi:* ${ds.definition.slice(0, 120)}...\n\n` : '') +
-        `📌 *Sumber Data:* ${ds.source || 'BPS Kabupaten Bangka'}\n` +
-        `💡 _Data diambil otomatis langsung dari Katalog Dataset SAPA BPS._`;
-
-      return {
-        id: `tpl-dataset-${ds.id}`,
-        keyword: ds.name,
-        response,
-        category: ds.category || 'Data Statistik BPS',
-        source_type: 'DATASET',
-        dataset_id: ds.id,
-        dataset_code: ds.code,
-        is_active: true,
-        updated_at: ds.updated_at,
-      };
+      // Jangan tampilkan template lama jika sudah ada dataset resmi terbitan untuk topik ini
+      return !Array.from(datasetKeywords).some((dk) => dk && (kw.includes(dk) || dk.includes(kw)));
     });
 
-    // Template Dinamis Menu Utama (Menyusun semua dataset terbitan + 2 opsi layanan selalu di nomor terbawah)
-    const publishedDs = DatasetRepo.getAll().filter((d) => d.status === DataStatus.PUBLISHED);
+    // Template Dinamis Menu Utama (Hanya masukkan dataset yang memiliki record terbitan riil)
+    const publishedDs = DatasetRepo.getAll().filter((d) => {
+      if (d.status !== DataStatus.PUBLISHED) return false;
+      const recCount = getStore().records.filter(
+        (r) => r.dataset_id === d.id && !r.is_deleted && r.value !== null && r.status === DataStatus.PUBLISHED
+      ).length;
+      return recCount > 0;
+    });
+
     const seenCategories = new Set<string>();
     const mLines: string[] = [];
     let mNum = 1;
@@ -1371,7 +1447,7 @@ export const ChatbotTemplateRepo = {
       updated_at: new Date().toISOString(),
     };
 
-    return [dynamicMenuTemplate, ...datasetTemplates, ...manualList];
+    return [dynamicMenuTemplate, ...datasetTemplates, ...filteredManual];
   },
 
   getById(id: string): ChatbotTemplate | undefined {

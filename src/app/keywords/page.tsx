@@ -7,8 +7,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
 import Header from '@/components/layout/Header';
 import { Button, Toast, EmptyState } from '@/components/ui';
-import { ChatbotTemplateRepo, DatasetRepo, subscribe } from '@/lib/repository';
-import { ChatbotTemplate, DataStatus, Dataset } from '@/lib/types';
+import { ChatbotTemplateRepo, DatasetRepo, RecordRepo, subscribe } from '@/lib/repository';
+import { ChatbotTemplate, DataStatus, Dataset, DataRecord } from '@/lib/types';
 import { BackendApi } from '@/lib/apiClient';
 import {
   MessageSquare,
@@ -217,8 +217,14 @@ export default function KeywordsPage() {
     setTimeout(() => {
       const clean = text.trim().toLowerCase();
 
-      // Bangun daftar menu dinamis: Mengelompokkan berdasarkan Kategori dataset resmi BPS
-      const allPublishedDs = DatasetRepo.getAll().filter((d) => d.status === DataStatus.PUBLISHED);
+      // Bangun daftar menu dinamis: Mengelompokkan berdasarkan Kategori dataset resmi BPS (hanya yang memiliki data riil)
+      const allPublishedDs = DatasetRepo.getAll().filter((d) => {
+        if (d.status !== DataStatus.PUBLISHED) return false;
+        const recCount = RecordRepo.getByDataset(d.id).filter(
+          (r: DataRecord) => r.status === DataStatus.PUBLISHED && !r.is_deleted && r.value !== null
+        ).length;
+        return recCount > 0;
+      });
       const datasetTemplates = templates.filter((t) => t.source_type === 'DATASET' && t.id !== 'tpl-system-menu');
       const seenCategories = new Set<string>();
       let mIdx = 1;

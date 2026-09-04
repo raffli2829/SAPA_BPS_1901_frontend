@@ -157,6 +157,10 @@ export const BackendApi = {
     return safeFetch<DataRecord[]>(`${BASE_URL}/api/backend/records${q}`);
   },
 
+  async getRecordById(id: string): Promise<DataRecord | null> {
+    return safeFetch<DataRecord>(`${BASE_URL}/api/backend/records/${id}`);
+  },
+
   async createRecord(record: Partial<DataRecord>): Promise<DataRecord | null> {
     return safeFetch<DataRecord>(`${BASE_URL}/api/backend/records`, {
       method: 'POST',
@@ -190,6 +194,10 @@ export const BackendApi = {
     return safeFetch<ReviewRequest[]>(`${BASE_URL}/api/backend/reviews`);
   },
 
+  async getReviewById(id: string): Promise<ReviewRequest | null> {
+    return safeFetch<ReviewRequest>(`${BASE_URL}/api/backend/reviews/${id}`);
+  },
+
   async submitReview(data: {
     dataset_id: string;
     dataset_name?: string;
@@ -217,6 +225,13 @@ export const BackendApi = {
     });
   },
 
+  async deleteReview(id: string): Promise<boolean> {
+    const res = await safeFetch<{ success: boolean }>(`${BASE_URL}/api/backend/reviews/${id}`, {
+      method: 'DELETE',
+    });
+    return !!res?.success;
+  },
+
   // Audit Logs
   async getAuditLogs(): Promise<AuditLog[] | null> {
     return safeFetch<AuditLog[]>(`${BASE_URL}/api/backend/audit-logs`);
@@ -229,9 +244,21 @@ export const BackendApi = {
     });
   },
 
+  async clearAuditLogs(id?: string): Promise<boolean> {
+    const q = id ? `?id=${encodeURIComponent(id)}` : '';
+    const res = await safeFetch<{ success: boolean }>(`${BASE_URL}/api/backend/audit-logs${q}`, {
+      method: 'DELETE',
+    });
+    return !!res?.success;
+  },
+
   // Users & Categories & Summary
   async getUsers(): Promise<User[] | null> {
     return safeFetch<User[]>(`${BASE_URL}/api/backend/users`);
+  },
+
+  async getUserById(id: string): Promise<User | null> {
+    return safeFetch<User>(`${BASE_URL}/api/backend/users/${id}`);
   },
 
   async createUser(user: Partial<User>): Promise<User | null> {
@@ -259,11 +286,47 @@ export const BackendApi = {
     return safeFetch<Category[]>(`${BASE_URL}/api/backend/categories`);
   },
 
+  async getCategoryById(id: string): Promise<Category | null> {
+    return safeFetch<Category>(`${BASE_URL}/api/backend/categories/${id}`);
+  },
+
   async createCategory(category: Partial<Category>): Promise<Category | null> {
     return safeFetch<Category>(`${BASE_URL}/api/backend/categories`, {
       method: 'POST',
       body: JSON.stringify(category),
     });
+  },
+
+  async updateCategory(id: string, category: Partial<Category>): Promise<Category | null> {
+    return safeFetch<Category>(`${BASE_URL}/api/backend/categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(category),
+    });
+  },
+
+  async deleteCategory(id: string): Promise<boolean> {
+    const res = await safeFetch<{ success: boolean }>(`${BASE_URL}/api/backend/categories/${id}`, {
+      method: 'DELETE',
+    });
+    return !!res?.success;
+  },
+
+  async getStoreSnapshot(): Promise<{
+    datasets: Dataset[];
+    records: DataRecord[];
+    categories: Category[];
+    users: User[];
+    reviews: ReviewRequest[];
+    auditLogs: AuditLog[];
+  } | null> {
+    return safeFetch<{
+      datasets: Dataset[];
+      records: DataRecord[];
+      categories: Category[];
+      users: User[];
+      reviews: ReviewRequest[];
+      auditLogs: AuditLog[];
+    }>(`${BASE_URL}/api/backend/sync/store`);
   },
 
   async syncStore(snapshot: {
@@ -273,6 +336,8 @@ export const BackendApi = {
     users?: User[];
     reviews?: ReviewRequest[];
     auditLogs?: AuditLog[];
+    deleted_dataset_ids?: string[];
+    deleted_record_ids?: string[];
   }): Promise<{
     datasets: Dataset[];
     records: DataRecord[];

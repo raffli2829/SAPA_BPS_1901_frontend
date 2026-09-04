@@ -11,6 +11,28 @@ export async function GET(request: NextRequest) {
   const category = searchParams.get('category');
   const search = searchParams.get('search');
 
+  // Coba ambil data terbaru dari backend Express
+  const backendUrl = (process.env.BACKEND_URL || 'http://127.0.0.1:80').replace(/\/$/, '');
+  try {
+    const qStr = searchParams.toString();
+    const res = await fetch(`${backendUrl}/api/datasets?status=PUBLISHED${qStr ? `&${qStr}` : ''}`, {
+      cache: 'no-store',
+      headers: { 'x-api-key': process.env.NEXT_PUBLIC_API_KEY || 'sapa_bps_secure_token_2026' }
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json && Array.isArray(json.data)) {
+        return NextResponse.json({
+          success: true,
+          data: json.data,
+          count: json.data.length,
+        });
+      }
+    }
+  } catch (err) {
+    // Fallback ke DatasetRepo
+  }
+
   let datasets = DatasetRepo.getPublished();
 
   if (category) {
