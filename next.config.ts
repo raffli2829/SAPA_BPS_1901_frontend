@@ -11,8 +11,8 @@ const DEFAULT_TUNNEL_URL = 'https://footless-aptitude-caloric.ngrok-free.dev';
 
 const BACKEND_URL = (
   process.env.BACKEND_INTERNAL_URL ||
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
   process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
   (process.env.VERCEL || process.env.NODE_ENV === 'production' ? DEFAULT_TUNNEL_URL : 'http://127.0.0.1:80')
 ).replace(/\/$/, '');
 
