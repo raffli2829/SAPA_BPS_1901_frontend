@@ -50,8 +50,6 @@ async function safeFetch<T>(url: string, options?: RequestInit): Promise<T | nul
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'ngrok-skip-browser-warning': 'true',
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    Pragma: 'no-cache',
     ...(API_KEY ? { 'x-api-key': API_KEY } : {}),
     ...(options?.headers as Record<string, string> || {}),
   };

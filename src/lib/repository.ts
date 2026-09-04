@@ -213,10 +213,17 @@ export async function syncWithBackend(): Promise<void> {
       hasChanges = true;
     }
 
+    const isLive = Boolean(syncRes || datasets || records || categories || users);
+
     if (hasChanges) {
       notify();
     }
-    updateBackendStatus({ isConnected: true, isSyncing: false, lastSyncedAt: new Date() });
+
+    if (isLive) {
+      updateBackendStatus({ isConnected: true, isSyncing: false, lastSyncedAt: new Date() });
+    } else {
+      updateBackendStatus({ isConnected: false, isSyncing: false });
+    }
   } catch (err) {
     console.warn('[Backend Sync] Menggunakan data lokal (backend offline):', err);
     updateBackendStatus({ isConnected: false, isSyncing: false });
